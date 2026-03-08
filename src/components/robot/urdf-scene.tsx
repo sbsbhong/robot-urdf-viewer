@@ -55,11 +55,8 @@ export function RobotUrdfScene() {
 
         manager.onLoad = () => {
             if (!mounted) return;
-            if (baseRef.current) applyShadow(baseRef.current);
-            if (previewRef.current) {
-                applyShadow(previewRef.current);
-                applyGhostStyle(previewRef.current);
-            }
+            if (baseRef.current) initializeRobotStyle(baseRef.current, false);
+            if (previewRef.current) initializeRobotStyle(previewRef.current, true);
         };
 
         const loader = new URDFLoader(manager);
@@ -120,48 +117,49 @@ export function RobotUrdfScene() {
     );
 }
 
-function applyShadow(root: THREE.Object3D) {
+function initializeRobotStyle(root: THREE.Object3D, isGhost: boolean = false) {
     root.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
-
         if (!mesh.isMesh) return;
 
+        // 공통: 그림자 켜기
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-    });
-}
 
-function applyGhostStyle(root: THREE.Object3D) {
-    root.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-
-        if (!mesh.isMesh || !mesh.material) return;
-
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-
-        for (const material of materials) {
-            const standardMaterial = material as THREE.MeshStandardMaterial;
-
-            // 기존 머티리얼을 최대한 유지하면서 고스트 느낌만 추가
-            standardMaterial.transparent = true;
-            standardMaterial.opacity = 0.6;
-            standardMaterial.depthWrite = false;
-
-            // 파란색 틴트
-            if ("color" in standardMaterial && standardMaterial.color) {
-                standardMaterial.color = standardMaterial.color.clone().lerp(new THREE.Color("#4da3ff"), 0.75);
+        // Preview 로봇인 경우에만 고스트 스타일 입히기
+        if (isGhost && mesh.material) {
+            // 원본 머티리얼 복제 (Base 로봇과 상태 공유 방지)
+            if (Array.isArray(mesh.material)) {
+                mesh.material = mesh.material.map((m) => m.clone());
+            } else {
+                mesh.material = mesh.material.clone();
             }
 
-            // 살짝 빛나는 느낌
-            if ("emissive" in standardMaterial && standardMaterial.emissive) {
-                standardMaterial.emissive = new THREE.Color("#1e5eff");
-                standardMaterial.emissiveIntensity = 0.35;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+            for (const material of materials) {
+                const std = material as THREE.MeshStandardMaterial;
+
+                std.transparent = true;
+                std.opacity = 0.6;
+                std.depthWrite = false;
+
+                if (std.color) {
+                    std.color.lerp(new THREE.Color("#4da3ff"), 0.75);
+                }
+
+                if ("emissive" in std && std.emissive) {
+                    std.emissive.set(new THREE.Color("#1e5eff"));
+                    std.emissiveIntensity = 0.35;
+                }
             }
         }
     });
 }
 
 export function applyHoverHighlight(robot: URDFRobot, hoveredJointName: string | null) {
+    //console.log(hoveredJointName !== null ? robot.joints[hoveredJointName] : "hoveredJointName");
+
     Object.entries(robot.joints).forEach(([jointName, jointObj]) => {
         jointObj.traverse((obj) => {
             const mesh = obj as THREE.Mesh;
